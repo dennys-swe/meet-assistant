@@ -39,12 +39,6 @@ class CopilotApp:
         self.engine: CopilotEngine | None = None
         self.window = None
         self._unsubscribe = None
-        # Falado por quem foi o último turno enviado para transcrição. O
-        # callback `on_turn` do motor não carrega `speaker` (fora do escopo
-        # mexer no motor além do necessário), então guardamos aqui para a
-        # janela colorir a fala certa — seguro porque `ingest` é síncrono e
-        # o worker processa um turno por vez.
-        self._speaker_atual: str | None = None
 
     # ------------------------------------------------------------------
 
@@ -95,7 +89,7 @@ class CopilotApp:
         self.engine = CopilotEngine(
             llm=from_settings(self.settings),
             callbacks=EngineCallbacks(
-                on_turn=lambda t, d: self.window.append_turn(t, d, self._speaker_atual),
+                on_turn=self.window.append_turn,
                 on_answer_start=self.window.start_answer,
                 on_answer_chunk=self.window.append_answer_chunk,
                 on_answer_done=self.window.finish_answer,
@@ -148,7 +142,6 @@ class CopilotApp:
 
     def _ao_transcrever(self, utterance: Utterance) -> None:
         if utterance.text.strip() and self.engine is not None:
-            self._speaker_atual = utterance.speaker
             self.engine.ingest(utterance.text, speaker=utterance.speaker)
 
     # ------------------------------------------------------------------

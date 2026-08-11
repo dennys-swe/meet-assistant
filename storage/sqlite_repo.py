@@ -332,6 +332,21 @@ class SQLiteRepository(SessionRepository):
         conn = self._connect()
         with self._lock():
             cur = conn.cursor()
+            # `BEGIN IMMEDIATE` pega a trava de escrita do arquivo já na
+            # abertura da transação, e não no primeiro INSERT. Sem isso, duas
+            # threads gravando na MESMA sessão (cada uma com sua conexão, ver
+            # `_connect`) podiam intercalar insert e releitura dos ids: a
+            # thread A commitava, a B inseria, e a releitura de A trazia os
+            # ids de B. Insert e releitura têm que ser uma unidade.
+            if not conn.in_transaction:
+                cur.execute("BEGIN IMMEDIATE")
+            # Marco anterior ao insert: os ids desta chamada são exatamente
+            # os maiores que ele. Não depende de `lastrowid` do `executemany`
+            # (que só garante o último item em builds recentes do sqlite3)
+            # nem de contar "os últimos N".
+            marco = cur.execute(
+                "SELECT COALESCE(MAX(id), 0) AS m FROM segments"
+            ).fetchone()["m"]
             cur.executemany(
                 """INSERT INTO segments
                    (session_id, text, started_at, ended_at, speaker, meta)
@@ -348,17 +363,12 @@ class SQLiteRepository(SessionRepository):
                     for s in segments
                 ],
             )
-            conn.commit()
-            # `executemany` só garante o `lastrowid` do último item em builds
-            # recentes do sqlite3; para não depender disso, relemos os ids
-            # dos últimos N inseridos nesta sessão (ordem == ordem de inserção,
-            # já que AUTOINCREMENT é estritamente crescente).
-            n = len(segments)
-            rows = conn.execute(
-                "SELECT id FROM segments WHERE session_id = ? ORDER BY id DESC LIMIT ?",
-                (session_id, n),
+            rows = cur.execute(
+                "SELECT id FROM segments WHERE session_id = ? AND id > ? ORDER BY id",
+                (session_id, marco),
             ).fetchall()
-            ids = [r["id"] for r in reversed(rows)]
+            conn.commit()
+            ids = [r["id"] for r in rows]
             for seg, new_id in zip(segments, ids):
                 seg.id = new_id
                 seg.session_id = session_id

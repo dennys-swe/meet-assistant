@@ -320,6 +320,141 @@ def test_add_e_list_artifacts_em_ordem():
             repo.close()
 
 
+# -- concorrência ---------------------------------------------------------
+
+
+def test_add_segments_concorrente_devolve_os_ids_certos():
+    """Regressão da corrida em `add_segments`.
+
+    Banco em ARQUIVO de propósito: é o modo em que cada thread tem sua própria
+    conexão e não há lock em processo — o `:memory:` compartilhado do resto da
+    suíte serializa tudo e esconderia o problema. Antes da correção, o insert
+    commitava e só depois relia "os últimos N da sessão", então uma thread
+    podia levar embora os ids gravados por outra.
+    """
+    import tempfile
+    import threading
+
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = SQLiteRepository(Path(tmp) / "acervo.db")
+        try:
+            sessao = repo.create_session(_sessao())
+            n_threads, por_thread = 12, 15
+            largada = threading.Barrier(n_threads)
+            resultados: list[tuple[int, str]] = []
+            erros: list[Exception] = []
+            lock = threading.Lock()
+
+            def gravar(t: int) -> None:
+                try:
+                    largada.wait()
+                    for lote in range(3):
+                        segs = [
+                            Segment(text=f"t{t}-l{lote}-{i}", started_at=i, ended_at=i + 1)
+                            for i in range(por_thread // 3)
+                        ]
+                        salvos = repo.add_segments(sessao.id, segs)
+                        with lock:
+                            resultados.extend((s.id, s.text) for s in salvos)
+                except Exception as e:  # relatado no fim; nunca engolido
+                    with lock:
+                        erros.append(e)
+
+            threads = [threading.Thread(target=gravar, args=(t,)) for t in range(n_threads)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+            assert not erros, f"threads falharam: {erros[:3]}"
+
+            ids = [i for i, _ in resultados]
+            assert len(set(ids)) == len(ids), "o mesmo id foi devolvido a dois segmentos"
+
+            # O par (id, texto) que cada thread recebeu tem que bater com o que
+            # está gravado. É aqui que a versão antiga quebrava.
+            no_banco = {s.id: s.text for s in repo.list_segments(sessao.id)}
+            assert len(no_banco) == n_threads * (por_thread // 3) * 3
+            for seg_id, texto in resultados:
+                assert no_banco[seg_id] == texto, (
+                    f"id {seg_id} devolvido como {texto!r}, gravado como {no_banco[seg_id]!r}"
+                )
+        finally:
+            repo.close()
+
+
+def test_add_segments_segura_a_trava_ate_reler_os_ids():
+    """O teste que realmente prova a correção.
+
+    A versão antiga fazia INSERT → COMMIT → SELECT dos ids. O bug mora na
+    fresta entre o COMMIT e o SELECT: ali a trava de escrita já foi solta e
+    outro gravador entra. Martelar com threads não reproduz (12 threads e 540
+    inserções não pegaram), porque a fresta é curta demais — então em vez de
+    torcer pelo agendamento, paramos a thread A dentro dela e checamos se a
+    thread B consegue escrever.
+
+    Com a correção (`BEGIN IMMEDIATE` cobrindo insert e releitura), B tem que
+    ficar barrada. Sem ela, B entra e o teste falha.
+    """
+    import sqlite3
+    import tempfile
+    import threading
+
+    with tempfile.TemporaryDirectory() as tmp:
+        caminho = Path(tmp) / "acervo.db"
+        repo = SQLiteRepository(caminho)
+        try:
+            sessao = repo.create_session(_sessao())
+
+            no_select = threading.Event()
+            pode_seguir = threading.Event()
+            b_entrou: list[bool] = []
+
+            def espiar(sql: str) -> None:
+                # Pausa A exatamente na releitura dos ids.
+                if sql.strip().upper().startswith("SELECT ID FROM SEGMENTS"):
+                    no_select.set()
+                    pode_seguir.wait(5.0)
+
+            def gravar_a() -> None:
+                repo._connect().set_trace_callback(espiar)
+                repo.add_segments(
+                    sessao.id, [Segment(text="A", started_at=0, ended_at=1)]
+                )
+
+            def tentar_b() -> None:
+                if not no_select.wait(5.0):
+                    return
+                # timeout=0: queremos saber se dá para escrever AGORA, não
+                # esperar a vez.
+                conn = sqlite3.connect(caminho, timeout=0)
+                try:
+                    conn.execute("BEGIN IMMEDIATE")
+                    b_entrou.append(True)
+                    conn.rollback()
+                except sqlite3.OperationalError:
+                    b_entrou.append(False)  # barrada, que é o esperado
+                finally:
+                    conn.close()
+                    pode_seguir.set()
+
+            ta = threading.Thread(target=gravar_a)
+            tb = threading.Thread(target=tentar_b)
+            ta.start()
+            tb.start()
+            tb.join(10)
+            pode_seguir.set()  # destrava A mesmo se B não chegou lá
+            ta.join(10)
+
+            assert b_entrou, "a thread B não chegou a testar a trava"
+            assert not b_entrou[0], (
+                "outro gravador conseguiu entrar entre o insert e a releitura "
+                "dos ids — a fresta da corrida ainda está aberta"
+            )
+        finally:
+            repo.close()
+
+
 if __name__ == "__main__":
     import traceback
 

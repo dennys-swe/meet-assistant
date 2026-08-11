@@ -74,7 +74,12 @@ class Exchange:
 class EngineCallbacks:
     """Ganchos para a interface. Todos opcionais."""
 
-    on_turn: Callable[[str, Detection], None] | None = None
+    # `speaker` viaja na assinatura de propósito: a interface precisa saber
+    # quem falou para etiquetar o turno, e antes ela lia isso de uma variável
+    # de instância preenchida logo antes de `ingest`. Funcionava só enquanto
+    # existisse uma única thread de transcrição — com duas, o turno de uma
+    # sairia com o falante da outra, em silêncio.
+    on_turn: Callable[[str, Detection, str | None], None] | None = None
     on_answer_start: Callable[[Exchange], None] | None = None
     on_answer_chunk: Callable[[Exchange, str], None] | None = None
     on_answer_done: Callable[[Exchange], None] | None = None
@@ -148,7 +153,7 @@ class CopilotEngine:
         self._historico.append(limpo)
         self._ultimo_turno = frase if deteccao.is_question else limpo
 
-        self._chamar(self.callbacks.on_turn, limpo, deteccao)
+        self._chamar(self.callbacks.on_turn, limpo, deteccao, speaker)
 
         if deteccao.is_question and speaker != SPEAKER_USER and self._pode_responder_agora():
             # Mandamos o turno INTEIRO, não só a frase detectada. A frase

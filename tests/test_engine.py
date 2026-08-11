@@ -10,6 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from capture.multi import SPEAKER_SYSTEM, SPEAKER_USER  # noqa: E402
 from llm.base import LLMClient, LLMError  # noqa: E402
 from modes.copilot.engine import (  # noqa: E402
     CopilotEngine,
@@ -44,6 +45,7 @@ class FakeLLM(LLMClient):
 class Coletor:
     def __init__(self):
         self.turnos = []
+        self.falantes = []
         self.chunks = []
         self.prontos: list[Exchange] = []
         self.erros = []
@@ -51,11 +53,15 @@ class Coletor:
 
     def callbacks(self) -> EngineCallbacks:
         return EngineCallbacks(
-            on_turn=lambda t, d: self.turnos.append((t, d.is_question)),
+            on_turn=self._turno,
             on_answer_chunk=lambda e, c: self.chunks.append(c),
             on_answer_done=self._done,
             on_error=self.erros.append,
         )
+
+    def _turno(self, texto: str, deteccao, speaker: str | None) -> None:
+        self.turnos.append((texto, deteccao.is_question))
+        self.falantes.append(speaker)
 
     def _done(self, troca: Exchange) -> None:
         self.prontos.append(troca)
@@ -201,6 +207,49 @@ def test_pergunta_em_turno_longo_manda_o_turno_inteiro():
     conteudo = llm.chamadas[-1][0]["content"]
     assert "Todos os ricos brasileiros ostentam" in conteudo, "faltou o contexto do turno"
     assert "Mas por que eles têm essa necessidade?" in conteudo
+
+
+def test_on_turn_recebe_o_falante():
+    motor, c = montar()
+    motor.ingest("Fala do sistema.", speaker=SPEAKER_SYSTEM)
+    motor.ingest("Fala minha.", speaker=SPEAKER_USER)
+    motor.ingest("Fala sem falante.")
+
+    assert c.falantes == [SPEAKER_SYSTEM, SPEAKER_USER, None]
+
+
+def test_falante_nao_se_mistura_entre_threads():
+    """Regressão: o falante já morou numa variável de instância do app, lida
+    pelo callback. Com duas threads transcrevendo, o turno de uma saía com o
+    falante da outra. Agora ele viaja na chamada, então não há como cruzar."""
+    motor, c = montar(auto_answer=False)
+    pares: list[tuple[str, str | None]] = []
+    lock = threading.Lock()
+
+    def registrar(texto, deteccao, speaker):
+        with lock:
+            pares.append((texto, speaker))
+
+    motor.callbacks.on_turn = registrar
+    largada = threading.Barrier(2)
+
+    def falar(speaker: str, n: int):
+        largada.wait()
+        for i in range(n):
+            motor.ingest(f"{speaker}-{i}", speaker=speaker)
+
+    ts = [
+        threading.Thread(target=falar, args=(SPEAKER_SYSTEM, 60)),
+        threading.Thread(target=falar, args=(SPEAKER_USER, 60)),
+    ]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+
+    assert len(pares) == 120
+    for texto, speaker in pares:
+        assert texto.startswith(speaker), f"turno {texto!r} saiu como {speaker!r}"
 
 
 if __name__ == "__main__":
