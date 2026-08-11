@@ -46,6 +46,8 @@ logger = logging.getLogger("e2e")
 
 VERDE, AMARELO, CINZA, RESET = "\033[32m", "\033[33m", "\033[90m", "\033[0m"
 
+MARCA_TETO = "[teto de chamadas atingido"
+
 
 class LLMDeMentira(LLMClient):
     """Substitui o provedor sem tocar na rede.
@@ -86,7 +88,7 @@ class LLMComTeto(LLMClient):
     def stream_reply(self, system, messages, max_tokens=300, temperature=0.3) -> Iterator[str]:
         if self.chamadas >= self.teto:
             self.cortadas += 1
-            yield f"[teto de {self.teto} chamadas atingido — resposta não pedida]"
+            yield f"{MARCA_TETO} ({self.teto}) — resposta não pedida]"
             return
         self.chamadas += 1
         yield from self.interno.stream_reply(system, messages, max_tokens, temperature)
@@ -201,7 +203,7 @@ def montar_llm(args) -> LLMClient:
         return LLMDeMentira()
 
     import config.settings as cfg
-    from llm import from_settings
+    from llm.openai_compat import from_settings
 
     s = cfg.load()
     if not s.is_ready:
@@ -263,6 +265,12 @@ def main() -> int:
         respondendo.setdefault(troca.id, []).append(pedaco)
 
     def ao_pronto(troca) -> None:
+        # A resposta cortada pelo teto passa pelo mesmo caminho de streaming
+        # (é isso que a torna útil como dublê), mas contá-la como resposta
+        # gerada faria o relatório mentir sobre quantas chamadas saíram.
+        if troca.answer.startswith(MARCA_TETO):
+            print(f"  {CINZA}⊘ resposta suprimida pelo teto{RESET}\n", flush=True)
+            return
         rel.respostas.append({"pergunta": troca.question, "resposta": troca.answer})
         print(f"  {VERDE}🤖 {troca.answer.strip()[:300]}{RESET}\n", flush=True)
 
@@ -300,11 +308,22 @@ def main() -> int:
             pcm = ler_wav(args.replay)
             segmenter = Segmenter(seg_config)
             bloco = BYTES_PER_SECOND // 10  # 100 ms, como o recorder entrega
+
+            def entregar(fala: Utterance) -> None:
+                # Ao vivo a captura é mais lenta que a transcrição e a fila
+                # nunca enche. No replay o arquivo entra a jato, a fila
+                # estoura e o worker DESCARTA — o replay perdia turnos e
+                # deixava de ser comparável com a captura. Segurar aqui custa
+                # tempo de parede e mantém o replay sem perda.
+                while worker.pending >= 4:
+                    time.sleep(0.2)
+                worker.submit(fala)
+
             for i in range(0, len(pcm), bloco):
                 for fala in segmenter.feed(pcm[i : i + bloco]):
-                    worker.submit(fala)
+                    entregar(fala)
             for fala in segmenter.flush():
-                worker.submit(fala)
+                entregar(fala)
         else:
             try:
                 fontes = {f.node_name: f for f in list_sources()}

@@ -1,56 +1,95 @@
 # Onde paramos
 
-Sessão pausada por limite de uso. Este arquivo é o suficiente para retomar sem
-reconstruir contexto.
-
 ## Estado do git
 
 ```
-aaad1a3  copilot: captura do microfone como segunda fonte     ← agente D ✅
-cffe354  exporters: markdown, Obsidian e JSON                 ← agente B ✅
-15a7f1e  storage: repositório SQLite e em memória             ← agente A ✅
-6fe314c  contratos de domínio + AGENTS.md
-19ef2b2  base: captura, VAD, transcrição e Copilot
+ad8b069  e2e: harness de teste com audio real e estrategia de testes
+b2b3001  fecha a corrida em add_segments e leva o falante em on_turn
+160a60c  modo Aula (agente C)
+cb85a4b  modes/session
+7daaf9c  nota de retomada
+aaad1a3  copilot: microfone como segunda fonte (agente D)
+cffe354  exporters (agente B)
+15a7f1e  storage (agente A)
 ```
 
-Tudo commitado. Os quatro agentes concluíram.
+Tudo commitado. **As duas pendências da revisão foram corrigidas** — não
+precisa mais rodar revisor em cima delas.
 
-## Testes (últimos verificados, rodados por mim, não pelos agentes)
+## Testes
 
-```
-tests/test_segmenter.py     8/8
-tests/test_detector.py     16/16
-tests/test_engine.py       12/12
-tests/test_storage.py      18/18
-tests/test_exporters.py    12/12
-tests/test_multi_source.py  9/9
-tests/test_session_mode.py 13/13
-                           ─────
-                           88/88
+`92/92` nas unidades. Rode assim (não há pytest no venv; cada arquivo é um
+runner):
+
+```bash
+for f in tests/test_*.py; do .venv/bin/python "$f"; done
 ```
 
-## Próximo passo imediato
+Quatro testes novos. O que prova a correção da corrida no SQLite é
+determinístico — para a thread A dentro da fresta entre o insert e a releitura
+e verifica se a B consegue escrever. **Confirmado que ele falha no código
+antigo**; martelar com 12 threads não falhava, que era o problema do
+diagnóstico original.
 
-1. **Rodar o revisor no Opus** sobre os quatro diffs. Ele precisa **executar**
-   a suíte, não só ler código. Dois pontos para ele examinar especificamente:
+Camada nova de teste end-to-end: `e2e_copilot.py` e `TESTES.md`.
 
-   - `storage/sqlite_repo.py`, `add_segments`: recupera os IDs relendo os
-     últimos N por `session_id` depois do commit, e no modo arquivo não há
-     lock. Corrida teórica entre threads. Tentei reproduzir com 12 threads,
-     largada por barreira e 540 inserções — **não reproduzi**. Sugestão de
-     correção: capturar `max(id)` antes do insert e selecionar `id > esse`,
-     ou envolver insert+select numa transação `BEGIN IMMEDIATE`.
+## O que o teste com áudio real mostrou
 
-   - `copilot_app.py`, `self._speaker_atual`: o próprio agente D sinalizou como
-     a parte mais frágil. O `on_turn` do motor não carrega `speaker`, então o
-     app guarda o falante numa variável de instância lida pelo callback. É
-     seguro hoje porque o worker de transcrição é uma thread só e `ingest` é
-     síncrono — quebra em silêncio no dia que houver duas threads. **Correção
-     certa:** passar `speaker` pela assinatura de `on_turn`.
+10 minutos de Roda Viva tocados no sink e capturados pelo monitor
+(`runs/2026-08-11T17-58-33/`):
 
-2. **Só então o teste real** com áudio de aula/reunião.
+| métrica | valor |
+|---|---|
+| turnos | 88 |
+| fala capturada | 570 s de 600 s |
+| RTF mediano | **0,22** — folga de 4,5× |
+| ASR mediano | 1,6 s |
 
-## Depois disso, na fila
+O caminho `pw-record` → VAD → Whisper → detector aguenta fala contínua com
+sobra. O caminho de rede também foi exercitado (4 chamadas reais ao
+OpenRouter, streaming e teto funcionando, ~US$ 0,0002).
+
+## Próximo passo: o detector
+
+É o único ponto fraco que apareceu, e ele erra **dos dois lados**. Os três
+casos reproduzem em uma linha, sem áudio:
+
+```python
+from modes.copilot.detector import QuestionDetector
+d = QuestionDetector()
+d.detect_in_turn("O que diferencia?")                      # ❌ deveria ser pergunta
+d.detect_in_turn("Então, queria entender se a senhora acha…")  # ❌ deveria ser pergunta
+d.detect_in_turn("Eu acho que pode ser conversado, discutido…")  # ❌ NÃO é pergunta
+```
+
+1. **Pergunta curta morre no filtro de tamanho.** `detector.py:127` corta em
+   `MIN_PALAVRAS = 4` antes de chegar ao `endswith("?")` da linha 140. "Por
+   quê?", "E agora?", "O que diferencia?" nunca passam. A correção provável é
+   só ordem: `?` é o sinal mais forte que existe, deveria ser avaliado antes
+   do filtro de tamanho — mas depois da regra de muleta, senão "isso faz
+   sentido, né?" vira pergunta.
+
+2. **Pergunta indireta escapa.** O padrão da linha 42 exige
+   `(gostaria|queria) de (saber|entender)`. Em entrevista formal sai "queria
+   entender da senhora se…", sem o "de".
+
+3. **"pode ser" dispara falso positivo.** O padrão de pedido da linha 40 casa
+   com `pode\s+\w+`, e "pode ser" é das construções mais comuns do português
+   falado. Metade das detecções dos 10 minutos foi isso: "pode ser
+   questionado", "pode ser modificado". O guard de hedge (`_RE_HEDGE.match`)
+   não salva porque é ancorado no início: "**Eu** acho que pode ser…" não
+   casa.
+
+O item 3 é o que custa dinheiro: com `auto_answer` ligado, cada falso positivo
+é uma chamada paga, e o LLM responde a fragmento sem sentido ("Para o que?
+Para ter sua fé explorada…").
+
+**Não mexi no detector de propósito.** O comentário na linha 151 diz que a
+regra ingênua deu 100% de falso positivo, então ele está calibrado contra
+transcrição real, e mudar precisão/recall muda o custo por hora que você
+mediu. É decisão de produto, não de refactor.
+
+## Na fila, depois disso
 
 - Integrar o Modo Aula na interface (hoje só existe o Copilot na janela).
 - Modo Stealth: esconder a janela da captura de tela. No Wayland é mais
@@ -60,9 +99,9 @@ tests/test_session_mode.py 13/13
 ## Lembretes
 
 - **Revogar a chave do OpenRouter** que apareceu em texto puro no histórico da
-  conversa e gerar outra.
+  conversa e gerar outra. Continua pendente.
 - O modelo configurado hoje é `google/gemma-3-12b-it` (pago, ~US$0,000057 por
-  resposta). O padrão de primeira execução continua num `:free`, de propósito,
-  para o app funcionar sem exigir cartão de quem for testar.
+  resposta). O padrão de primeira execução continua num `:free`, de propósito.
 - Antes de mexer em qualquer coisa: leia `AGENTS.md`. As sete travas ali
   custaram medição.
+- `runs/` está no `.gitignore` — os artefatos de teste não vão para o repo.
