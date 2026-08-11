@@ -13,9 +13,7 @@ cffe354  exporters: markdown, Obsidian e JSON                 ← agente B ✅
 19ef2b2  base: captura, VAD, transcrição e Copilot
 ```
 
-**Não commitado:** `modes/session/` e `tests/test_session_mode.py` — o agente C
-(Modo Aula) ainda estava rodando quando pausamos. Verifique o que ficou em
-disco antes de retomar: pode estar incompleto.
+Tudo commitado. Os quatro agentes concluíram.
 
 ## Testes (últimos verificados, rodados por mim, não pelos agentes)
 
@@ -26,17 +24,14 @@ tests/test_engine.py       12/12
 tests/test_storage.py      18/18
 tests/test_exporters.py    12/12
 tests/test_multi_source.py  9/9
+tests/test_session_mode.py 13/13
                            ─────
-                           75/75
+                           88/88
 ```
 
 ## Próximo passo imediato
 
-1. **Conferir o agente C.** Se `modes/session/` estiver completo, rodar
-   `tests/test_session_mode.py` e commitar. Se estiver pela metade, relançar
-   o agente com o mesmo prompt (está no histórico da conversa).
-
-2. **Rodar o revisor no Opus** sobre os quatro diffs. Ele precisa **executar**
+1. **Rodar o revisor no Opus** sobre os quatro diffs. Ele precisa **executar**
    a suíte, não só ler código. Dois pontos para ele examinar especificamente:
 
    - `storage/sqlite_repo.py`, `add_segments`: recupera os IDs relendo os
@@ -53,7 +48,7 @@ tests/test_multi_source.py  9/9
      síncrono — quebra em silêncio no dia que houver duas threads. **Correção
      certa:** passar `speaker` pela assinatura de `on_turn`.
 
-3. **Só então o teste real** com áudio de aula/reunião.
+2. **Só então o teste real** com áudio de aula/reunião.
 
 ## Depois disso, na fila
 
