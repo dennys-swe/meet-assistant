@@ -18,7 +18,7 @@ import threading
 
 from asr.whisper_local import WhisperLocal
 from asr.worker import TranscriptionWorker
-from capture.pipeline import CapturePipeline
+from capture.multi import MultiSourcePipeline
 from capture.segmenter import SegmenterConfig
 from capture.sources import AudioSourceError, resolve_internal_audio
 from config import settings as cfg
@@ -34,11 +34,17 @@ class CopilotApp:
 
     def __init__(self, settings: cfg.Settings):
         self.settings = settings
-        self.pipeline: CapturePipeline | None = None
+        self.pipeline: MultiSourcePipeline | None = None
         self.worker: TranscriptionWorker | None = None
         self.engine: CopilotEngine | None = None
         self.window = None
         self._unsubscribe = None
+        # Falado por quem foi o último turno enviado para transcrição. O
+        # callback `on_turn` do motor não carrega `speaker` (fora do escopo
+        # mexer no motor além do necessário), então guardamos aqui para a
+        # janela colorir a fala certa — seguro porque `ingest` é síncrono e
+        # o worker processa um turno por vez.
+        self._speaker_atual: str | None = None
 
     # ------------------------------------------------------------------
 
@@ -50,6 +56,7 @@ class CopilotApp:
             on_settings_saved=self._ao_salvar_config,
             on_listen_toggled=self._ao_alternar_escuta,
             on_auto_toggled=lambda v: self.engine and self.engine.set_auto_answer(v),
+            on_mic_toggled=self._ao_alternar_mic,
             on_answer_last=lambda: self.engine and self.engine.answer_last_turn(),
             on_context_changed=lambda t: self.engine and self.engine.update_user_context(t),
             on_test_connection=self._testar_conexao,
@@ -88,7 +95,7 @@ class CopilotApp:
         self.engine = CopilotEngine(
             llm=from_settings(self.settings),
             callbacks=EngineCallbacks(
-                on_turn=self.window.append_turn,
+                on_turn=lambda t, d: self.window.append_turn(t, d, self._speaker_atual),
                 on_answer_start=self.window.start_answer,
                 on_answer_chunk=self.window.append_answer_chunk,
                 on_answer_done=self.window.finish_answer,
@@ -121,9 +128,11 @@ class CopilotApp:
         # 8s é o ajuste que dá a sensação das ferramentas de ditado: elas não
         # fazem streaming, transcrevem em lote a cada pausa — o "ao vivo"
         # vem do trecho ser curto, não do motor ser contínuo.
-        self.pipeline = CapturePipeline(
-            source=fonte,
-            config=SegmenterConfig(end_silence_ms=450, max_utterance_s=8.0),
+        segmenter_config = SegmenterConfig(end_silence_ms=450, max_utterance_s=8.0)
+        self.pipeline = MultiSourcePipeline(
+            system_source=fonte,
+            config=segmenter_config,
+            mic_config=segmenter_config,
         )
 
         self.window.set_status(f"Carregando Whisper '{self.settings.whisper_model}'...")
@@ -139,7 +148,8 @@ class CopilotApp:
 
     def _ao_transcrever(self, utterance: Utterance) -> None:
         if utterance.text.strip() and self.engine is not None:
-            self.engine.ingest(utterance.text)
+            self._speaker_atual = utterance.speaker
+            self.engine.ingest(utterance.text, speaker=utterance.speaker)
 
     # ------------------------------------------------------------------
 
@@ -160,6 +170,20 @@ class CopilotApp:
                 self._unsubscribe = None
             if self.engine is not None:
                 self.engine.cancel()
+
+    def _ao_alternar_mic(self, ligado: bool) -> None:
+        if self.pipeline is None:
+            self.iniciar_audio()
+            if self.pipeline is None:
+                return
+
+        if ligado:
+            try:
+                self.pipeline.enable_microphone()
+            except Exception as e:
+                self.window.show_error(f"Não foi possível abrir o microfone: {e}")
+        else:
+            self.pipeline.disable_microphone()
 
     def encerrar(self) -> None:
         logger.info("Encerrando Copilot...")

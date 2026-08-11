@@ -48,6 +48,24 @@ def _nodes(dump: list[dict]) -> list[dict]:
     return [o for o in dump if o.get("type") == "PipeWire:Interface:Node"]
 
 
+def default_source_name(dump: list[dict] | None = None) -> str | None:
+    """Nome da fonte de entrada padrão (o microfone ativo agora)."""
+    dump = dump if dump is not None else _pw_dump()
+
+    for obj in dump:
+        if obj.get("type") != "PipeWire:Interface:Metadata":
+            continue
+        if obj.get("props", {}).get("metadata.name") != "default":
+            continue
+        for entrada in obj.get("metadata", []):
+            if entrada.get("key") == "default.audio.source":
+                valor = entrada.get("value")
+                if isinstance(valor, dict):
+                    return valor.get("name")
+                return valor
+    return None
+
+
 def default_sink_name(dump: list[dict] | None = None) -> str | None:
     """Nome do sink de saída padrão (para onde o áudio está tocando agora)."""
     dump = dump if dump is not None else _pw_dump()
@@ -119,4 +137,32 @@ def resolve_internal_audio() -> AudioSource:
 
     fonte = AudioSource(node_name=sink, description=descricao, is_monitor=True)
     logger.info("Fonte de áudio interno resolvida: %s", fonte.node_name)
+    return fonte
+
+
+def resolve_microphone() -> AudioSource:
+    """A fonte de microfone padrão, para captar a fala do próprio usuário.
+
+    Análogo a `resolve_internal_audio`, mas lendo `default.audio.source` em
+    vez de `default.audio.sink` — é a mesma metadata do PipeWire, só que do
+    lado de entrada.
+    """
+    dump = _pw_dump()
+    fonte_nome = default_source_name(dump)
+
+    if fonte_nome is None:
+        raise AudioSourceError(
+            "Nenhum microfone padrão definido no PipeWire. "
+            "Verifique se há um dispositivo de entrada ativo (wpctl status)."
+        )
+
+    descricao = fonte_nome
+    for node in _nodes(dump):
+        props = node.get("info", {}).get("props", {}) or {}
+        if props.get("node.name") == fonte_nome:
+            descricao = props.get("node.description") or fonte_nome
+            break
+
+    fonte = AudioSource(node_name=fonte_nome, description=descricao, is_monitor=False)
+    logger.info("Fonte de microfone resolvida: %s", fonte.node_name)
     return fonte

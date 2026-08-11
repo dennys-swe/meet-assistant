@@ -29,6 +29,7 @@ from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from capture.multi import SPEAKER_USER
 from llm.base import LLMClient, LLMError
 from modes.copilot.detector import Detection, QuestionDetector
 
@@ -126,8 +127,15 @@ class CopilotEngine:
     # Entrada
     # ------------------------------------------------------------------
 
-    def ingest(self, texto: str) -> Detection:
-        """Recebe um turno transcrito. Dispara a resposta se for pergunta."""
+    def ingest(self, texto: str, speaker: str | None = None) -> Detection:
+        """Recebe um turno transcrito. Dispara a resposta se for pergunta.
+
+        `speaker` identifica quem falou (ver `capture/multi.py`). Quando é a
+        própria voz do usuário (`SPEAKER_USER`), o turno ainda entra no
+        histórico — é contexto valioso, é a resposta dele — mas nunca dispara
+        resposta automática: responder a uma pergunta que o próprio usuário
+        fez é inútil e gasta cota de API à toa.
+        """
         limpo = (texto or "").strip()
         if not limpo:
             return Detection(False)
@@ -142,7 +150,7 @@ class CopilotEngine:
 
         self._chamar(self.callbacks.on_turn, limpo, deteccao)
 
-        if deteccao.is_question and self._pode_responder_agora():
+        if deteccao.is_question and speaker != SPEAKER_USER and self._pode_responder_agora():
             # Mandamos o turno INTEIRO, não só a frase detectada. A frase
             # sozinha costuma ser um fragmento sem referente — "mas por que
             # eles têm a necessidade?" rendeu uma resposta genérica sobre

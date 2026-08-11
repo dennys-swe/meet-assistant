@@ -18,6 +18,7 @@ from collections.abc import Callable
 
 import customtkinter as ctk
 
+from capture.multi import SPEAKER_USER
 from config import settings as cfg
 from modes.copilot.detector import Detection
 from modes.copilot.engine import Exchange
@@ -31,6 +32,7 @@ COR_PERGUNTA = "#FFA502"
 COR_OK = "#2ED573"
 COR_ERRO = "#FF4757"
 COR_APAGADA = "#6B7280"
+COR_VOCE = "#5B9BD5"
 FONTE = "Roboto"
 
 
@@ -41,6 +43,7 @@ class CopilotWindow(ctk.CTk):
         on_settings_saved: Callable[[cfg.Settings], None] | None = None,
         on_listen_toggled: Callable[[bool], None] | None = None,
         on_auto_toggled: Callable[[bool], None] | None = None,
+        on_mic_toggled: Callable[[bool], None] | None = None,
         on_answer_last: Callable[[], None] | None = None,
         on_context_changed: Callable[[str], None] | None = None,
         on_test_connection: Callable[[cfg.Settings], str | None] | None = None,
@@ -50,6 +53,7 @@ class CopilotWindow(ctk.CTk):
         self.on_settings_saved = on_settings_saved
         self.on_listen_toggled = on_listen_toggled
         self.on_auto_toggled = on_auto_toggled
+        self.on_mic_toggled = on_mic_toggled
         self.on_answer_last = on_answer_last
         self.on_context_changed = on_context_changed
         self.on_test_connection = on_test_connection
@@ -232,6 +236,10 @@ class CopilotWindow(ctk.CTk):
         self._switch_auto = ctk.CTkSwitch(topo, text="Auto", command=self._alternar_auto)
         self._switch_auto.select()
         self._switch_auto.pack(side="left", padx=(14, 0))
+        self._switch_mic = ctk.CTkSwitch(
+            topo, text="Meu microfone", command=self._alternar_mic
+        )
+        self._switch_mic.pack(side="left", padx=(14, 0))
         ctk.CTkButton(
             topo, text="⚙", width=32, fg_color="transparent", hover_color="#374151",
             command=lambda: self.mostrar_configuracao(),
@@ -249,6 +257,7 @@ class CopilotWindow(ctk.CTk):
         self._box_transcricao.configure(state="disabled")
         self._box_transcricao.tag_config("pergunta", foreground=COR_PERGUNTA)
         self._box_transcricao.tag_config("normal", foreground="#D1D5DB")
+        self._box_transcricao.tag_config("voce", foreground=COR_VOCE)
 
         cabecalho = ctk.CTkFrame(c, fg_color="transparent")
         cabecalho.pack(fill="x")
@@ -307,6 +316,15 @@ class CopilotWindow(ctk.CTk):
             else "Modo manual: use “Responder último turno”. Economiza cota."
         )
 
+    def _alternar_mic(self) -> None:
+        ligado = bool(self._switch_mic.get())
+        if self.on_mic_toggled:
+            self.on_mic_toggled(ligado)
+        self.set_status(
+            "Ouvindo também o seu microfone." if ligado
+            else "Microfone desligado. Ouvindo só o áudio do sistema."
+        )
+
     def _alternar_contexto(self) -> None:
         self._contexto_aberto = not self._contexto_aberto
         if self._contexto_aberto:
@@ -340,16 +358,23 @@ class CopilotWindow(ctk.CTk):
     def set_status(self, texto: str, cor: str = COR_APAGADA) -> None:
         self.after(0, lambda: self._status.configure(text=texto, text_color=cor))
 
-    def append_turn(self, texto: str, deteccao: Detection) -> None:
-        self.after(0, self._append_turn, texto, deteccao)
+    def append_turn(self, texto: str, deteccao: Detection, speaker: str | None = None) -> None:
+        self.after(0, self._append_turn, texto, deteccao, speaker)
 
-    def _append_turn(self, texto: str, deteccao: Detection) -> None:
+    def _append_turn(self, texto: str, deteccao: Detection, speaker: str | None = None) -> None:
         box = self._box_transcricao
         box.configure(state="normal")
         marca = "❓ " if deteccao.is_question else "· "
+        prefixo = "você: " if speaker == SPEAKER_USER else ""
+        if speaker == SPEAKER_USER:
+            tag = "voce"
+        elif deteccao.is_question:
+            tag = "pergunta"
+        else:
+            tag = "normal"
         # Linha em branco entre turnos: sem ela, blocos longos de fala
         # contínua viram um paredão ilegível.
-        box.insert("end", f"{marca}{texto}\n\n", "pergunta" if deteccao.is_question else "normal")
+        box.insert("end", f"{marca}{prefixo}{texto}\n\n", tag)
         box.see("end")
         box.configure(state="disabled")
 
