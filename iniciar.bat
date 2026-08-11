@@ -15,7 +15,7 @@ IF NOT EXIST "venv\Scripts\activate.bat" (
 :: Ativa o ambiente e roda o app
 echo Iniciando Meet Assistant...
 call venv\Scripts\activate
-python app_gui.py
+python main.py
 
 :: Se o app fechar com erro, o pause permite ler o que aconteceu
 if %ERRORLEVEL% NEQ 0 (

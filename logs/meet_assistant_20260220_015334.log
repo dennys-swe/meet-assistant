@@ -1,0 +1,37 @@
+2026-02-20 01:53:34 | root                           | INFO     | ================================================================================
+2026-02-20 01:53:34 | root                           | INFO     | MEET ASSISTANT INICIADO - Log file: logs\meet_assistant_20260220_015334.log
+2026-02-20 01:53:34 | root                           | INFO     | ================================================================================
+2026-02-20 01:53:34 | root                           | INFO     | Log level: INFO
+2026-02-20 01:53:36 | config.settings                | INFO     | 
+================================================================================
+2026-02-20 01:53:36 | config.settings                | INFO     | DISPOSITIVOS DE ÁUDIO DISPONÍVEIS (38 total):
+2026-02-20 01:53:36 | config.settings                | INFO     | ================================================================================
+2026-02-20 01:53:37 | config.settings                | INFO     | ================================================================================
+
+2026-02-20 01:53:37 | __main__                       | INFO     | Iniciando Meet Assistant AI v3.2...
+2026-02-20 01:53:37 | core.ai_services               | INFO     | Gemini API configurado com sucesso
+2026-02-20 01:53:37 | core.ai_services               | INFO     | Whisper pronto para lazy loading (carregará na primeira uso)
+2026-02-20 01:53:37 | core.ai_services               | INFO     | Google Speech Recognition inicializado
+2026-02-20 01:53:37 | gui.app_window                 | INFO     | Calibrando ruído com device 4...
+2026-02-20 01:53:38 | gui.app_window                 | INFO     | Calibração de ruído concluída
+2026-02-20 01:53:38 | gui.app_window                 | INFO     | MeetAssistantApp inicializado com sucesso
+2026-02-20 01:53:38 | core.audio_engine              | INFO     | AudioEngine iniciado
+2026-02-20 01:54:07 | core.ai_services               | INFO     |    Texto: 'resultados muito bons Eu vou te dar um'
+2026-02-20 01:54:07 | core.ai_services               | INFO     |    Confiança: 82.14% (Threshold: 70.00%)
+2026-02-20 01:54:11 | core.ai_services               | INFO     |    Texto: 'você que está aí na sua casa você tá achando não mas está simples demais'
+2026-02-20 01:54:11 | core.ai_services               | INFO     |    Confiança: 76.80% (Threshold: 70.00%)
+2026-02-20 01:54:14 | core.ai_services               | INFO     |    Texto: 'nu assistindo curso porque logo logo já'
+2026-02-20 01:54:14 | core.ai_services               | INFO     |    Confiança: 79.78% (Threshold: 70.00%)
+2026-02-20 01:54:18 | core.ai_services               | INFO     |    Texto: 'na frente né a gente tá vendo fazendo o curso sei o que vem por'
+2026-02-20 01:54:18 | core.ai_services               | INFO     |    Confiança: 80.53% (Threshold: 70.00%)
+2026-02-20 01:54:21 | core.ai_services               | INFO     |    Texto: 'vai vir muitas dicas legais para você fazer'
+2026-02-20 01:54:21 | core.ai_services               | INFO     |    Confiança: 82.14% (Threshold: 70.00%)
+2026-02-20 01:54:24 | core.ai_services               | INFO     |    Texto: 'o chat GPT se comportar conforme você quer que'
+2026-02-20 01:54:24 | core.ai_services               | INFO     |    Confiança: 82.14% (Threshold: 70.00%)
+2026-02-20 01:54:28 | core.ai_services               | INFO     |    Texto: 'suporte isso vai melhorar muito a tua vida com certeza'
+2026-02-20 01:54:28 | core.ai_services               | INFO     |    Confiança: 79.20% (Threshold: 70.00%)
+2026-02-20 01:54:31 | core.ai_services               | INFO     |    Texto: 'mensagem regressiva quase acabando faltam só 3 dias para nossa'
+2026-02-20 01:54:31 | core.ai_services               | INFO     |    Confiança: 77.95% (Threshold: 70.00%)
+2026-02-20 01:54:37 | gui.app_window                 | INFO     | Encerrando MeetAssistantApp...
+2026-02-20 01:54:37 | core.audio_engine              | INFO     | ThreadPoolExecutor finalizado
+2026-02-20 01:54:37 | __main__                       | INFO     | Meet Assistant encerrado

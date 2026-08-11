@@ -1,0 +1,21 @@
+2026-02-20 01:30:13 | root                           | INFO     | ================================================================================
+2026-02-20 01:30:13 | root                           | INFO     | MEET ASSISTANT INICIADO - Log file: logs\meet_assistant_20260220_013013.log
+2026-02-20 01:30:13 | root                           | INFO     | ================================================================================
+2026-02-20 01:30:13 | root                           | INFO     | Log level: INFO
+2026-02-20 01:30:14 | config.settings                | INFO     | 
+================================================================================
+2026-02-20 01:30:14 | config.settings                | INFO     | DISPOSITIVOS DE ÁUDIO DISPONÍVEIS (38 total):
+2026-02-20 01:30:14 | config.settings                | INFO     | ================================================================================
+2026-02-20 01:30:15 | config.settings                | INFO     | ================================================================================
+
+2026-02-20 01:30:15 | __main__                       | INFO     | Iniciando Meet Assistant AI v3.2...
+2026-02-20 01:30:15 | core.ai_services               | INFO     | Gemini API configurado com sucesso
+2026-02-20 01:30:15 | core.ai_services               | INFO     | Whisper pronto para lazy loading (carregará na primeira uso)
+2026-02-20 01:30:15 | core.ai_services               | INFO     | Google Speech Recognition inicializado
+2026-02-20 01:30:15 | gui.app_window                 | INFO     | Calibrando ruído com device 4...
+2026-02-20 01:30:16 | gui.app_window                 | INFO     | Calibração de ruído concluída
+2026-02-20 01:30:16 | gui.app_window                 | INFO     | MeetAssistantApp inicializado com sucesso
+2026-02-20 01:30:17 | core.audio_engine              | INFO     | AudioEngine iniciado
+2026-02-20 01:30:49 | gui.app_window                 | INFO     | Encerrando MeetAssistantApp...
+2026-02-20 01:30:49 | core.audio_engine              | INFO     | ThreadPoolExecutor finalizado
+2026-02-20 01:30:49 | __main__                       | INFO     | Meet Assistant encerrado

@@ -1,0 +1,57 @@
+2026-02-19 15:32:02 | root                           | INFO     | ================================================================================
+2026-02-19 15:32:02 | root                           | INFO     | MEET ASSISTANT INICIADO - Log file: logs\meet_assistant_20260219_153202.log
+2026-02-19 15:32:02 | root                           | INFO     | ================================================================================
+2026-02-19 15:32:02 | root                           | INFO     | Log level: INFO
+2026-02-19 15:32:09 | __main__                       | INFO     | Iniciando Meet Assistant AI v3.2...
+2026-02-19 15:32:09 | core.ai_services               | INFO     | Gemini API configurado com sucesso
+2026-02-19 15:32:09 | core.ai_services               | INFO     | Whisper pronto para lazy loading (carregará na primeira uso)
+2026-02-19 15:32:09 | core.ai_services               | INFO     | Google Speech Recognition inicializado
+2026-02-19 15:32:09 | gui.app_window                 | INFO     | Calibrando ruído com device 1...
+2026-02-19 15:32:10 | gui.app_window                 | INFO     | Calibração de ruído concluída
+2026-02-19 15:32:10 | core.audio_engine              | INFO     | AudioEngine criado com ThreadPoolExecutor (max_workers=2)
+2026-02-19 15:32:10 | gui.app_window                 | INFO     | MeetAssistantApp inicializado com sucesso
+2026-02-19 15:32:11 | core.audio_engine              | INFO     | AudioEngine iniciado
+2026-02-19 15:32:11 | core.audio_engine              | INFO     | Abrindo stream PyAudio: device=1, rate=48000, channels=2
+2026-02-19 15:32:11 | core.audio_engine              | INFO     | Stream PyAudio aberto com sucesso
+2026-02-19 15:33:04 | core.audio_engine              | INFO     | Gravação de aula iniciada
+2026-02-19 15:33:30 | core.audio_engine              | INFO     | Gravação salva em: temp_aula.wav
+2026-02-19 15:33:30 | gui.app_window                 | INFO     | Transcrevendo aula: temp_aula.wav
+2026-02-19 15:33:30 | core.ai_services               | INFO     | Carregando modelo Whisper na RAM (pode levar 2-3 segundos)...
+2026-02-19 15:33:31 | core.ai_services               | INFO     | Whisper carregado com sucesso
+2026-02-19 15:33:31 | core.ai_services               | INFO     | Transcrevendo arquivo Whisper: temp_aula.wav
+2026-02-19 15:33:39 | core.ai_services               | INFO     | Transcrição Whisper concluída (320 chars)
+2026-02-19 15:33:39 | gui.app_window                 | INFO     | Gerando resumo Gemini para matéria: Algebra
+2026-02-19 15:33:39 | core.ai_services               | WARNING  | Tentativa 1/2 falhou: GenerativeModel.generate_content() got an unexpected keyword argument 'timeout'. Aguardando 2s antes de retentar...
+2026-02-19 15:33:41 | core.ai_services               | ERROR    | Erro ao gerar resumo Gemini após retries: GenerativeModel.generate_content() got an unexpected keyword argument 'timeout'
+Traceback (most recent call last):
+  File "C:\Users\Dennys Alves\Projetos\Meet-Assistant\Meet-Assistant-Project\core\ai_services.py", line 80, in resumir_aula_gemini
+    result = retry_with_backoff(_call_gemini, max_retries=2, initial_delay=2)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dennys Alves\Projetos\Meet-Assistant\Meet-Assistant-Project\core\ai_services.py", line 16, in retry_with_backoff
+    return func()
+           ^^^^^^
+  File "C:\Users\Dennys Alves\Projetos\Meet-Assistant\Meet-Assistant-Project\core\ai_services.py", line 75, in _call_gemini
+    response = self.modelo_gemini.generate_content(prompt, timeout=30)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: GenerativeModel.generate_content() got an unexpected keyword argument 'timeout'
+2026-02-19 15:33:41 | gui.app_window                 | ERROR    | Erro ao processar aula: GenerativeModel.generate_content() got an unexpected keyword argument 'timeout'
+Traceback (most recent call last):
+  File "C:\Users\Dennys Alves\Projetos\Meet-Assistant\Meet-Assistant-Project\gui\app_window.py", line 174, in processar_aula_backend
+    resumo_ia = self.ai_service.resumir_aula_gemini(materia, texto_transcrito)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dennys Alves\Projetos\Meet-Assistant\Meet-Assistant-Project\core\ai_services.py", line 80, in resumir_aula_gemini
+    result = retry_with_backoff(_call_gemini, max_retries=2, initial_delay=2)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Dennys Alves\Projetos\Meet-Assistant\Meet-Assistant-Project\core\ai_services.py", line 16, in retry_with_backoff
+    return func()
+           ^^^^^^
+  File "C:\Users\Dennys Alves\Projetos\Meet-Assistant\Meet-Assistant-Project\core\ai_services.py", line 75, in _call_gemini
+    response = self.modelo_gemini.generate_content(prompt, timeout=30)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: GenerativeModel.generate_content() got an unexpected keyword argument 'timeout'
+2026-02-19 15:40:49 | gui.app_window                 | INFO     | Encerrando MeetAssistantApp...
+2026-02-19 15:40:49 | core.audio_engine              | INFO     | ThreadPoolExecutor finalizado
+2026-02-19 15:40:49 | core.audio_engine              | INFO     | AudioEngine parado
+2026-02-19 15:40:49 | core.audio_engine              | INFO     | Stream PyAudio fechado com sucesso
+2026-02-19 15:40:49 | core.audio_engine              | INFO     | PyAudio terminado
+2026-02-19 15:40:49 | __main__                       | INFO     | Meet Assistant encerrado

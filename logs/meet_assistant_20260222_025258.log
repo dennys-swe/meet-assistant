@@ -1,0 +1,30 @@
+2026-02-22 02:52:58 | root                           | INFO     | ================================================================================
+2026-02-22 02:52:58 | root                           | INFO     | MEET ASSISTANT INICIADO - Log file: logs\meet_assistant_20260222_025258.log
+2026-02-22 02:52:58 | root                           | INFO     | ================================================================================
+2026-02-22 02:52:58 | root                           | INFO     | Log level: INFO
+2026-02-22 02:53:03 | config.settings                | INFO     | 
+================================================================================
+2026-02-22 02:53:03 | config.settings                | INFO     | DISPOSITIVOS DE ÁUDIO DISPONÍVEIS (38 total):
+2026-02-22 02:53:03 | config.settings                | INFO     | ================================================================================
+2026-02-22 02:53:04 | config.settings                | INFO     | ================================================================================
+
+2026-02-22 02:53:04 | __main__                       | INFO     | Iniciando Meet Assistant AI v3.2...
+2026-02-22 02:53:05 | core.ai_services               | INFO     | Gemini API configurado com sucesso
+2026-02-22 02:53:05 | core.ai_services               | INFO     | Whisper pronto para lazy loading (carregará na primeira uso)
+2026-02-22 02:53:05 | core.ai_services               | INFO     | Google Speech Recognition inicializado
+2026-02-22 02:53:05 | gui.app_window                 | INFO     | Calibrando ruído com device 4...
+2026-02-22 02:53:06 | gui.app_window                 | INFO     | Calibração de ruído concluída
+2026-02-22 02:53:06 | gui.app_window                 | INFO     | MeetAssistantApp inicializado com sucesso
+2026-02-22 02:53:07 | core.audio_engine              | INFO     | AudioEngine iniciado
+2026-02-22 02:55:48 | gui.app_window                 | INFO     | Transcrevendo aula: temp_aula.wav
+2026-02-22 02:55:55 | core.ai_services               | INFO     | Carregando modelo Whisper na RAM (pode levar 2-3 segundos)...
+2026-02-22 02:55:57 | core.ai_services               | INFO     | Whisper carregado com sucesso
+2026-02-22 02:55:57 | core.ai_services               | INFO     | Transcrevendo arquivo Whisper: temp_aula.wav
+2026-02-22 02:57:49 | core.ai_services               | INFO     | Transcrição Whisper concluída (1406 chars)
+2026-02-22 02:57:49 | gui.app_window                 | INFO     | Gerando resumo Gemini para matéria: Ingles
+2026-02-22 02:57:54 | core.ai_services               | INFO     | Resumo Gemini gerado com sucesso (85 chars)
+2026-02-22 02:57:54 | gui.app_window                 | INFO     | Resumo salvo em: C:\Users\Dennys Alves\OneDrive\Documentos\Obsidian\Ingles\teste.md
+2026-02-22 02:59:47 | gui.app_window                 | INFO     | Encerrando MeetAssistantApp...
+2026-02-22 02:59:47 | core.audio_engine              | INFO     | ThreadPoolExecutor finalizado
+2026-02-22 02:59:47 | __main__                       | INFO     | Meet Assistant encerrado
+2026-02-22 02:59:47 | core.audio_engine              | INFO     | PyAudio terminado
