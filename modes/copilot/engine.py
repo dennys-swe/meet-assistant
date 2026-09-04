@@ -96,11 +96,11 @@ class EngineConfig:
     # Responder sozinho a toda pergunta detectada. Desligado, o motor só
     # responde quando `answer_last_turn()` é chamado.
     #
-    # Serve para dois casos opostos. Numa entrevista em que VOCÊ é o
-    # candidato, automático é o ponto do produto. Assistindo a uma palestra
-    # ou aula, quase toda pergunta é do palestrante para a plateia — responder
-    # a todas gasta cota gratuita à toa (~140 chamadas/hora numa entrevista
-    # de TV, medido).
+    # Serve para dois casos opostos. Numa call em que perguntas te são
+    # dirigidas direto, automático é o ponto do produto. Assistindo a uma
+    # palestra ou aula, quase toda pergunta é do palestrante para a plateia —
+    # responder a todas gasta cota gratuita à toa (~140 chamadas/hora medido
+    # num áudio de alto volume de perguntas).
     auto_answer: bool = True
 
     # Intervalo mínimo entre respostas automáticas. Perguntas em rajada
