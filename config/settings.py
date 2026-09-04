@@ -1,100 +1,161 @@
-import os
+"""Configuração do usuário — modelo BYOK (bring your own key).
+
+O app é feito para ser testado por terceiros, então nenhuma chave vai no
+código nem no repositório: cada pessoa põe a sua na primeira execução, e ela
+fica no diretório de config do usuário, não no projeto.
+
+O padrão é OpenRouter porque uma única chave dá acesso a dezenas de modelos,
+incluindo variantes `:free` — quem for testar não precisa gastar nada. Como
+o OpenRouter fala o protocolo da OpenAI, o mesmo cliente atende qualquer
+provedor compatível só trocando a `base_url`.
+"""
+
+from __future__ import annotations
+
+import json
 import logging
-from dotenv import load_dotenv
+import os
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
 
-# Carrega as variáveis de ambiente (o seu .env)
-load_dotenv()
-
-# Configure logging
 logger = logging.getLogger(__name__)
 
-# --- CHAVES DE API ---
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if not GEMINI_API_KEY:
-    logger.warning("GEMINI_API_KEY não configurada. Aba Copilot/Resumo não funcionará. Adicione a chave em .env")
+CONFIG_DIR = Path(
+    os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")
+) / "meet-assistant"
+CONFIG_PATH = CONFIG_DIR / "config.json"
 
-# --- CONFIGURAÇÕES DE ÁUDIO GLOBAIS ---
-DEVICE_INDEX = int(os.getenv("DEVICE_INDEX", "-1"))  # -1 = default do sistema
-SAMPLE_RATE = 16000  # ✅ OTIMIZADO: Google Speech reconhece melhor em 16kHz
-CHUNK = 1024
-CHANNELS = 1  # ✅ MUDADO: Mono para melhor compatibilidade com Google Speech
-_SAMPLE_WIDTH = None  # Lazy-loaded
 
-# --- CONFIGURAÇÕES DE OBSIDIAN ---
-OBSIDIAN_PATH = os.getenv("OBSIDIAN_PATH", os.path.join(os.path.expanduser("~"), "OneDrive", "Documentos", "Obsidian"))
-if not os.path.exists(OBSIDIAN_PATH):
-    logger.warning(f"⚠️ OBSIDIAN_PATH '{OBSIDIAN_PATH}' não existe. Verifique o caminho no .env")
+@dataclass(frozen=True)
+class Provider:
+    key: str
+    label: str
+    base_url: str
+    default_model: str
+    needs_key: bool = True
+    signup_url: str = ""
 
-# --- CONFIGURAÇÕES DE INTERFACE (TEMA) ---
-APPEARANCE_MODE = "Dark"
-COLOR_THEME = "dark-blue"
-CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.85"))
 
-# --- FUNÇÕES DE INICIALIZAÇÃO ---
-def get_sample_width():
-    """Lazy load sample width (evita inicializar PyAudio no module level)"""
-    global _SAMPLE_WIDTH
-    if _SAMPLE_WIDTH is None:
-        import pyaudio  # Import aqui para evitar module-level
-        try:
-            _SAMPLE_WIDTH = pyaudio.get_sample_size(pyaudio.paInt16)
-        except Exception as e:
-            logger.error(f"Erro ao obter sample width: {e}")
-            _SAMPLE_WIDTH = 2  # Fallback para 16-bit
-    return _SAMPLE_WIDTH
+# A ordem importa: é a ordem que aparece na tela de configuração.
+PROVIDERS: dict[str, Provider] = {
+    # Modelo padrão escolhido por medição, não por reputação. Critérios, nesta
+    # ordem: primeiro token rápido (é o que dá sensação de tempo real),
+    # resposta direta em pt-BR, e obediência ao marcador [IGNORAR].
+    #
+    # Os Nemotron da NVIDIA foram descartados apesar de gratuitos: são modelos
+    # de raciocínio e vazam o "pensamento" na resposta, em inglês
+    # ("We need to respond in Portuguese...") — inútil para ler de relance.
+    "openrouter": Provider(
+        key="openrouter",
+        label="OpenRouter (recomendado)",
+        base_url="https://openrouter.ai/api/v1",
+        default_model="google/gemma-4-26b-a4b-it:free",
+        signup_url="https://openrouter.ai/keys",
+    ),
+    "groq": Provider(
+        key="groq",
+        label="Groq (rápido, tem tier grátis)",
+        base_url="https://api.groq.com/openai/v1",
+        default_model="llama-3.3-70b-versatile",
+        signup_url="https://console.groq.com/keys",
+    ),
+    "openai": Provider(
+        key="openai",
+        label="OpenAI",
+        base_url="https://api.openai.com/v1",
+        default_model="gpt-4o-mini",
+        signup_url="https://platform.openai.com/api-keys",
+    ),
+    "ollama": Provider(
+        key="ollama",
+        label="Ollama (local, sem chave)",
+        base_url="http://localhost:11434/v1",
+        default_model="llama3.1:8b",
+        needs_key=False,
+    ),
+    "custom": Provider(
+        key="custom",
+        label="Outro (compatível com OpenAI)",
+        base_url="",
+        default_model="",
+    ),
+}
 
-def validate_device_index():
-    """Valida e lista dispositivos disponíveis; retorna DEVICE_INDEX se válido, senão default"""
+
+@dataclass
+class Settings:
+    provider: str = "openrouter"
+    base_url: str = ""
+    api_key: str = ""
+    model: str = ""
+
+    # "Contexto base" do Copilot: currículo, vaga, matéria da aula. Fica aqui
+    # para sobreviver entre sessões — na v1 sumia a cada reinício.
+    user_context: str = ""
+
+    language: str = "pt"
+    whisper_model: str = "small"
+
+    def __post_init__(self) -> None:
+        preset = PROVIDERS.get(self.provider)
+        if preset:
+            self.base_url = self.base_url or preset.base_url
+            self.model = self.model or preset.default_model
+
+    @property
+    def preset(self) -> Provider | None:
+        return PROVIDERS.get(self.provider)
+
+    def validate(self) -> str | None:
+        """Devolve a primeira pendência em texto legível, ou None se está ok."""
+        if not self.base_url:
+            return "Informe a URL da API do provedor."
+        if not self.model:
+            return "Informe o modelo."
+        preset = self.preset
+        precisa_chave = preset.needs_key if preset else True
+        if precisa_chave and not self.api_key.strip():
+            return "Informe sua chave de API."
+        return None
+
+    @property
+    def is_ready(self) -> bool:
+        return self.validate() is None
+
+
+def load() -> Settings:
+    """Lê a config do usuário. Devolve os padrões se ainda não existe."""
+    if not CONFIG_PATH.exists():
+        return Settings()
+
     try:
-        import pyaudio  # Import aqui para evitar module-level
-        p = pyaudio.PyAudio()
-        device_count = p.get_device_count()
-        
-        logger.info(f"\n{'='*80}")
-        logger.info(f"DISPOSITIVOS DE ÁUDIO DISPONÍVEIS ({device_count} total):")
-        logger.info(f"{'='*80}")
-        for i in range(device_count):
-            try:
-                info = p.get_device_info_by_index(i)
-                maxInputChannels = info['maxInputChannels']
-                maxOutputChannels = info['maxOutputChannels']
-                sampleRate = int(info['defaultSampleRate'])
-                nome = info['name']
-                
-                marker = ""
-                # Marca dispositivos potencialmente úteis
-                if 'stereo mix' in nome.lower() or 'what u hear' in nome.lower():
-                    marker = " 🎙️ (STEREO MIX - potencial captura do Meet)"
-                elif 'mic' in nome.lower():
-                    marker = " 🎤 (MICROFONE)"
-                elif 'speaker' in nome.lower() or 'output' in nome.lower():
-                    marker = " 🔊 (SPEAKER/OUTPUT)"
-                
-                logger.info(
-                    f"  [{i}] {nome}{marker}\n"
-                    f"       └─ In: {maxInputChannels}ch, Out: {maxOutputChannels}ch, Taxa: {sampleRate}Hz"
-                )
-            except Exception as e:
-                logger.debug(f"Erro ao listar device {i}: {e}")
-        
-        logger.info(f"{'='*80}\n")
-        p.terminate()
-        
-        # Se DEVICE_INDEX = -1 (default), usa o padrão do sistema
-        if DEVICE_INDEX == -1:
-            logger.info("✅ Usando dispositivo DEFAULT do sistema (-1)")
-            return -1
-        
-        if DEVICE_INDEX < 0 or DEVICE_INDEX >= device_count:
-            logger.warning(f"⚠️ Device {DEVICE_INDEX} não encontrado. Usando default (0).")
-            return 0
-        
-        logger.info(f"✅ Device validado: {DEVICE_INDEX}")
-        return DEVICE_INDEX
-        
-    except Exception as e:
-        logger.error(f"Erro ao validar device: {e}. Usando default (0).")
-        return 0
+        dados = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning("Config inválida em %s (%s). Usando padrões.", CONFIG_PATH, e)
+        return Settings()
 
-# Inicializar device no módulo (chamado uma vez)
-DEVICE_INDEX_VALIDATED = validate_device_index()
+    conhecidos = {f for f in Settings.__dataclass_fields__}
+    return Settings(**{k: v for k, v in dados.items() if k in conhecidos})
+
+
+def save(settings: Settings) -> Path:
+    """Grava a config com permissão 600 — o arquivo contém uma chave de API."""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Cria já restrito, em vez de gravar e depois apertar: evita a janela em
+    # que a chave fica legível para outros usuários da máquina.
+    fd = os.open(CONFIG_PATH, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(asdict(settings), f, indent=2, ensure_ascii=False)
+
+    os.chmod(CONFIG_PATH, 0o600)  # garante 600 mesmo se o arquivo já existia
+    logger.info("Configuração salva em %s", CONFIG_PATH)
+    return CONFIG_PATH
+
+
+def mask_key(chave: str) -> str:
+    """Forma segura de exibir uma chave em log ou na interface."""
+    limpa = chave.strip()
+    if len(limpa) <= 8:
+        return "•" * len(limpa)
+    return f"{limpa[:4]}{'•' * 8}{limpa[-4:]}"
