@@ -1,16 +1,8 @@
-# Arquivos de ambiente e chaves (CRÍTICO)
-.env
-
-# Pasta do ambiente virtual (Gigante, não sobe)
-venv/
 .venv/
-
-# Arquivos temporários de áudio
-*.wav
-*.mp3
-
-# Arquivos compilados do Python
 __pycache__/
-
-# Resumos locais (opcional, se quiser salvar só no Obsidian)
-Resumo_*.md
+*.pyc
+.env
+*.wav
+data/
+logs/
+runs/
